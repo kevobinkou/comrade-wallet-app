@@ -11,6 +11,8 @@ const Dashboard = () => {
     const [amount, setAmount] = useState('');
     const [type, setType] = useState('expense');
     const [username, setUsername] = useState('');
+    const [formError, setFormError] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
     const navigate = useNavigate();
 
     const API_BASE_URL = `${API_ORIGIN}/api/transactions`;
@@ -43,14 +45,28 @@ const Dashboard = () => {
     };
 
     const handleAddTransaction = async (e) => {
-        e.preventDefault(); 
+        e.preventDefault();
+        setFormError('');
+
+        const numericAmount = Number(amount);
+        if (!title.trim() || !Number.isFinite(numericAmount) || numericAmount <= 0) {
+            setFormError('Enter a title and an amount greater than zero.');
+            return;
+        }
+
         const token = localStorage.getItem('token');
+        if (!token) {
+            navigate('/login');
+            return;
+        }
+
+        setIsSaving(true);
         try {
             const config = { headers: { Authorization: `Bearer ${token}` } };
             
             await axios.post(`${API_BASE_URL}/add`, {
-                title, 
-                amount: Number(amount), 
+                title: title.trim(),
+                amount: numericAmount,
                 type, 
                 category: "General" 
             }, config);
@@ -62,6 +78,15 @@ const Dashboard = () => {
             setTimeout(() => setShowToast(false), 3000); 
         } catch (err) {
             console.error("Transaction failed:", err);
+            setFormError(
+                err.response?.data?.message ||
+                err.response?.data?.msg ||
+                (err.response
+                    ? `Could not save transaction (HTTP ${err.response.status}).`
+                    : 'Could not reach the server. Check your connection and try again.')
+            );
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -121,12 +146,15 @@ const Dashboard = () => {
             {/* Input Form */}
             <form onSubmit={handleAddTransaction} style={styles.form}>
                 <input type="text" placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} style={styles.input} required />
-                <input type="number" placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} style={styles.input} required />
+                <input type="number" placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} style={styles.input} min="0.01" step="0.01" required />
                 <select value={type} onChange={(e) => setType(e.target.value)} style={styles.input}>
                     <option value="expense">Expense</option>
                     <option value="income">Income</option>
                 </select>
-                <button type="submit" style={styles.submitBtn}>Add Transaction</button>
+                <button type="submit" style={{ ...styles.submitBtn, ...(isSaving ? styles.submitBtnSaving : {}) }} disabled={isSaving}>
+                    {isSaving ? 'Saving…' : 'Add Transaction'}
+                </button>
+                {formError && <p role="alert" style={styles.error}>{formError}</p>}
             </form>
 
             {/* Transaction History List */}
@@ -163,6 +191,8 @@ const styles = {
     form: { display: 'flex', flexDirection: 'column', gap: '10px' },
     input: { padding: '10px', borderRadius: '5px', border: '1px solid #ccc' },
     submitBtn: { background: '#005a32', color: 'white', padding: '12px', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' },
+    submitBtnSaving: { opacity: 0.7, cursor: 'wait' },
+    error: { margin: 0, color: '#b42318', background: '#fef3f2', border: '1px solid #fecdca', borderRadius: '5px', padding: '10px' },
     historyItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', borderBottom: '1px solid #eee' },
     deleteBtn: { background: 'none', border: 'none', color: '#999', cursor: 'pointer', fontSize: '16px', fontWeight: 'bold' },
     toast: { position: 'fixed', top: '20px', right: '20px', backgroundColor: '#005a32', color: 'white', padding: '12px 24px', borderRadius: '8px', zIndex: 1000 }
